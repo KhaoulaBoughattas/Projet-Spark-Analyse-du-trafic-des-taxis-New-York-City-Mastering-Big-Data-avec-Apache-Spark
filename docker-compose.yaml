@@ -1,0 +1,10 @@
+services:
+  spark-jupyter:
+    image: mohamedamineellouze001/spark_scala_jupyter:v2
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./workspace:/workspace
+    environment:
+      - JUPYTER_PORT=8888
+    working_dir: /workspace 
