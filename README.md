@@ -1,6 +1,8 @@
 # Analyse des Trajets Taxi et Exploration du Ride-Sharing à New York
 
-## 1. Introduction
+## Description du projet
+Ce projet consiste à analyser un jeu de données de trajets en taxi afin de répondre à diverses problématiques autour du comportement des passagers, des modes de paiement, et du covoiturage (ride-sharing). L’objectif est de produire des insights exploitables pour optimiser les trajets, identifier des opportunités de covoiturage et effectuer des analyses avancées.
+
 Ce projet vise à analyser les données de trajets de taxis à New York en mettant l’accent sur les aspects suivants :  
 
 - Compréhension des types de trajets : courts (<5 km) vs longs (≥5 km).  
@@ -15,50 +17,118 @@ Les données contiennent des informations détaillées sur chaque trajet :
 - Distance (`trip_distance`) et durée (`trip_duration`) du trajet.  
 - Montant total payé (`total_amount`) et mode de paiement (`payment_type`).  
 - Autres frais annexes (`tip_amount`, `tolls_amount`, etc.).  
-
-Le projet a été développé en **Apache Spark avec Scala**, permettant un traitement efficace de gros volumes de données.
+Le projet est réalisé en **Scala Spark**, avec des visualisations générées en **Python** (notebook séparé) pour une exploration graphique riche.
 
 ---
 
-## 2. Méthodologie et Pipeline Spark
+## Structure du projet
 
-### 2.1 Prétraitement des données
-1. Conversion des dates et heures en timestamps standard (`timestamp_ntz`).  
-2. Filtrage des trajets invalides :  
-   - `trip_distance` > 0  
-   - `fare_amount` ≥ 0  
-   - `trip_duration` calculée en minutes à partir des timestamps.  
-3. Création de nouvelles colonnes pour enrichir les analyses :  
-   - `trip_type` : court (<5 km) / long (≥5 km)  
-   - `average_speed` : vitesse moyenne en km/h  
-   - `tip_percentage` : pourcentage de pourboire par rapport au total  
-   - `hour_of_day`, `day_of_week` pour les analyses temporelles.  
+taxi_project/
+│
+├─ notebooks/
+│ ├─ analysis.scala.ipynb # Notebook Scala avec toutes les transformations et analyses
+│ └─ visualization_python.ipynb # Notebook Python pour visualisations graphiques
+│
+├─ data/
+│ ├─ taxi_data.csv 
+│ ├─ yellow_tripdata_2025-11.parquet 
+│
+├─ output/
+│ ├─ payment_by_trip.csv # Résultats des paiements par type de trajet
+│ ├─ payment_over_time.csv # Paiements au fil du temps
+│ ├─ amount_by_payment.csv # Montants moyens et médians par mode de paiement
+│ └─ ride_sharing_analysis.csv # Résultats du covoiturage
+│
+├─ README.md # Ce fichier
+└─ docker-compose.yaml 
 
-### 2.2 Phase exploratoire
-- Statistiques descriptives : nombre de trajets par type, mode de paiement et zone.  
-- Analyse temporelle : nombre de trajets par mois et par heure.  
+---
 
-### 2.3 Ride-Sharing (Phase 5)
-- Identification des trajets courts partageables :  
-  - Même zone de départ et d’arrivée (`PULocationID`, `DOLocationID`).  
-  - Départs proches dans le temps (≤10 minutes).  
-- Calcul des économies potentielles :  
-  - **Coût partagé** = moitié du montant total pour deux clients.  
-  - **Temps économisé** : gain moyen sur la durée de trajet.  
+## Phases et analyses réalisées
 
-### 2.4 Détection d’anomalies
+### **Phase 1 : Prétraitement des données**
+- Nettoyage des valeurs manquantes et invalides (trip_distance > 0, fare_amount ≥ 0, tpep_pickup_datetime non nul).
+- Création des colonnes utiles :
+  - `trip_duration` (en minutes)
+  - `average_speed` (km/h)
+  - `trip_type` (`short_trip` si < 10 km, `long_trip` sinon)
+
+---
+
+### **Phase 2 : Analyse exploratoire**
+- Statistiques descriptives des trajets : distance, durée, vitesse moyenne.
+- Histogrammes et boxplots pour détecter des valeurs aberrantes.
+- Quantiles calculés pour identifier les trajets très courts ou très longs.
+
+---
+
+### **Phase 3 : Segmentation des trajets**
+- Catégorisation par distance, durée et tarif.
+- Distribution par type de trajet (`short_trip` vs `long_trip`).
+
+---
+
+### **Phase 4 : Analyse des modes de paiement**
+**Questions traitées :**
+1. Comment les passagers paient-ils les trajets courts et longs ?
+2. L’utilisation des modes de paiement évolue-t-elle dans le temps ?
+3. Y a-t-il une relation entre le montant total et le mode de paiement ?
+
+**Analyses réalisées :**
+- Comptage des trajets par type de paiement et type de trajet (`paymentByTripTypeDF`).
+- Comptage des paiements par mois (`paymentOverTimeDF`).
+- Calcul de la moyenne et médiane du `total_amount` par mode de paiement (`amountByPaymentDF`).
+
+**Visualisations générées :**
+- Bar plot : nombre de trajets par type de paiement (courts vs longs)
+- Line plot : évolution des paiements par mois
+- Box plot : distribution du montant total par mode de paiement
+
+**Interprétations :**
+- Les trajets courts sont majoritairement payés par carte de crédit (`payment_type = 1`) alors que les trajets longs montrent une plus grande diversité.
+- Le paiement par carte reste dominant sur la période analysée.
+- Les montants moyens varient selon le mode de paiement, avec certains modes plus coûteux en moyenne.
+
+---
+
+### **Phase 5 : Exploration du covoiturage (Ride-Sharing)**
+**Questions traitées :**
+1. Peut-on regrouper des trajets courts ayant des départs proches dans le temps et l’espace ?
+2. Quelle économie de temps ou d’argent cela pourrait-elle générer ?
+
+**Analyses réalisées :**
+- Fenêtre temporelle pour calculer l’écart entre trajets (`lag` sur `pickup_ts` par PULocationID et DOLocationID).
+- Détection des trajets partageables (écart ≤ 10 minutes).
+- Calcul des économies potentielles :
+  - `shared_cost = total_amount / 2`
+  - `money_saved = total_amount - shared_cost`
+- Calcul du temps gagné si les trajets étaient combinés.
+
+**Résultats clés :**
+- **Taux de trajets courts partageables : 49.08 %**
+- **Économie moyenne par trajet : 10.22$**
+- **Temps moyen gagné : 12.85 minutes**
+- Identification des zones avec le plus fort potentiel de covoiturage (`topRideSharingZonesDF`).
+
+**Interprétations :**
+- Presque la moitié des trajets courts peuvent être combinés pour un covoiturage.
+- Les économies sont significatives tant en temps qu’en argent.
+- Les zones les plus fréquentées sont les candidats prioritaires pour un service de covoiturage.
+
+---
+
+### **Extension : Détection d’anomalies **
+- Détection des trajets anormalement longs ou courts (`durationQuantiles`).
+- Calcul de la vitesse moyenne (`average_speed = trip_distance / trip_duration * 60`).
+- Création de nouvelles features pour analyses prédictives :
+  - `tip_percentage`
+  - `jour_de_la_semaine`
+  - `heure_de_la_journee`
+  - `fréquence_de_trajets_par_zone`
 - Utilisation des quantiles pour identifier les trajets atypiques :  
   - `trip_duration` min : 0.0167 min  
   - `trip_duration` max : 5438.8 min  
-- Filtrage des outliers pour analyses fiables.  
-
-### 2.5 Extensions
-- Feature engineering avancé : `average_speed`, `tip_percentage`, fréquence de trajets par zone.  
-- Catégorisation des trajets par distance, tarif ou durée.  
-- Segmentation par clustering KMeans pour détecter les hotspots de demande.  
-- Visualisations avancées : heatmaps, graphiques temporels, dashboards interactifs.
-
----
+- Filtrage des outliers pour analyses fiables.
 
 ## 3. Analyses principales et résultats
 
@@ -130,24 +200,6 @@ Le projet a été développé en **Apache Spark avec Scala**, permettant un trai
 
 ---
 
-### 3.5 Extensions et analyses avancées
-
-1. **Feature Engineering :**  
-   - `average_speed` = distance / durée  
-   - `tip_percentage` = tip / total_amount  
-   - Encodage temporel : `hour_of_day`, `day_of_week`, périodes de pointe  
-
-2. **Segmentation et clustering KMeans :**  
-   - Détection des hotspots de départ et d’arrivée  
-   - Analyse de la demande par zones et horaires
-
-3. **Visualisations avancées :**  
-   - Heatmaps des zones les plus fréquentées  
-   - Graphiques temporels pour la demande et les revenus  
-   - Dashboards interactifs avec Plotly ou Folium
-
----
-
 ## 4. Recommandations
 
 1. **Covoiturage :**  
@@ -166,11 +218,55 @@ Le projet a été développé en **Apache Spark avec Scala**, permettant un trai
 
 ---
 
-## 5. Conclusion
+## Instructions d’exécution
 
-- Le projet offre une **analyse complète des trajets de taxis** et met en évidence les avantages du covoiturage.  
-- Les extensions proposées enrichissent les données pour des applications prédictives et décisionnelles.  
-- Les analyses et visualisations peuvent guider la **gestion opérationnelle des taxis** et améliorer l’expérience client.
+### Scala Notebook
+1. Ouvrir `analysis.scala.ipynb` dans Databricks ou tout notebook Spark compatible.
+2. Charger le dataset :  
+```scala
+val taxiDF = spark.read.option("header", true).csv("data/yellow_tripdata_2025-11.parquet.parquet")
+
+
+Exécuter toutes les cellules pour reproduire les analyses et calculs.
+
+Exporter les résultats souhaités en CSV pour les visualisations Python.
+
+Python Notebook (Visualisations)
+
+Ouvrir visualization_python.ipynb.
+
+Installer les dépendances si nécessaire :
+
+pip install pandas matplotlib seaborn plotly
+
+
+Charger les CSV exportés depuis Scala.
+
+Exécuter les cellules pour générer les graphiques.
+
+Technologies et bibliothèques utilisées
+
+Scala Spark : traitement et transformation des données
+
+Python (Pandas, Matplotlib, Seaborn, Plotly) : visualisations et graphiques
+
+Databricks Notebook : exécution des notebooks Scala et Python
+
+CSV/Parquet : stockage intermédiaire des résultats
+
+Livrables
+
+analysis.scala.ipynb : notebook Scala complet
+
+visualization_python.ipynb : notebook Python avec toutes les visualisations
+
+README.md : ce fichier détaillé
+
+CSV de sortie pour les analyses et visualisations
+
+Conclusion
+
+Ce projet fournit une analyse complète des trajets de taxi, identifie les modes de paiement dominants, explore le potentiel de covoiturage et met en évidence des opportunités d’optimisation de temps et de coûts. Les extensions permettent d’appliquer un feature engineering pour des analyses prédictives ou un suivi en quasi temps réel.
 
 ---
 
