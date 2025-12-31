@@ -22,7 +22,7 @@ Le projet est réalisé en **Scala Spark**, avec des visualisations générées 
 ---
 
 ## Structure du projet
-'''css
+
 taxi_project/
 │
 ├─ notebooks/
@@ -41,7 +41,7 @@ taxi_project/
 │
 ├─ README.md # Ce fichier
 └─ docker-compose.yaml 
-'''
+
 
 ---
 
